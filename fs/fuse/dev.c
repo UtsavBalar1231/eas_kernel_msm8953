@@ -2025,6 +2025,8 @@ __acquires(fc->lock)
 		struct fuse_req *req;
 		req = list_entry(head->next, struct fuse_req, list);
 		req->out.h.error = -ECONNABORTED;
+		clear_bit(FR_SENT, &req->flags);
+		list_del_init(&req->list);
 		request_end(fc, req);
 		spin_lock(&fc->lock);
 	}
@@ -2119,9 +2121,38 @@ void fuse_abort_conn(struct fuse_conn *fc)
 	if (fc->connected) {
 		fc->connected = 0;
 		fc->blocked = 0;
-		fc->initialized = 1;
-		end_io_requests(fc);
-		end_queued_requests(fc);
+		fuse_set_initialized(fc);
+		list_for_each_entry(fud, &fc->devices, entry) {
+			struct fuse_pqueue *fpq = &fud->pq;
+
+			spin_lock(&fpq->lock);
+			fpq->connected = 0;
+			list_for_each_entry_safe(req, next, &fpq->io, list) {
+				req->out.h.error = -ECONNABORTED;
+				spin_lock(&req->waitq.lock);
+				set_bit(FR_ABORTED, &req->flags);
+				if (!test_bit(FR_LOCKED, &req->flags)) {
+					set_bit(FR_PRIVATE, &req->flags);
+					list_move(&req->list, &to_end1);
+				}
+				spin_unlock(&req->waitq.lock);
+			}
+			list_splice_init(&fpq->processing, &to_end2);
+			spin_unlock(&fpq->lock);
+		}
+		fc->max_background = UINT_MAX;
+		flush_bg_queue(fc);
+
+		spin_lock(&fiq->waitq.lock);
+		fiq->connected = 0;
+		list_splice_init(&fiq->pending, &to_end2);
+		list_for_each_entry(req, &to_end2, list)
+			clear_bit(FR_PENDING, &req->flags);
+		while (forget_pending(fiq))
+			kfree(dequeue_forget(fiq, 1, NULL));
+		wake_up_all_locked(&fiq->waitq);
+		spin_unlock(&fiq->waitq.lock);
+		kill_fasync(&fiq->fasync, SIGIO, POLL_IN);
 		end_polls(fc);
 		wake_up_all(&fc->waitq);
 		wake_up_all(&fc->blocked_waitq);
