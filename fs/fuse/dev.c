@@ -409,12 +409,17 @@ static void wait_answer_interruptible(struct fuse_conn *fc,
 __releases(fc->lock)
 __acquires(fc->lock)
 {
-	if (signal_pending(current))
+	spin_lock(&fiq->waitq.lock);
+	if (test_bit(FR_FINISHED, &req->flags)) {
+		spin_unlock(&fiq->waitq.lock);
 		return;
-
-	spin_unlock(&fc->lock);
-	wait_event_interruptible(req->waitq, req->state == FUSE_REQ_FINISHED);
-	spin_lock(&fc->lock);
+	}
+	if (list_empty(&req->intr_entry)) {
+		list_add_tail(&req->intr_entry, &fiq->interrupts);
+		wake_up_locked(&fiq->waitq);
+	}
+	spin_unlock(&fiq->waitq.lock);
+	kill_fasync(&fiq->fasync, SIGIO, POLL_IN);
 }
 
 static void queue_interrupt(struct fuse_conn *fc, struct fuse_req *req)
