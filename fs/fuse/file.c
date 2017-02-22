@@ -146,7 +146,8 @@ static void fuse_file_put(struct fuse_file *ff, bool sync)
 			path_put(&req->misc.release.path);
 			fuse_put_request(ff->fc, req);
 		} else if (sync) {
-			req->background = 0;
+			__set_bit(FR_FORCE, &req->flags);
+			__clear_bit(FR_BACKGROUND, &req->flags);
 			fuse_request_send(ff->fc, req);
 			path_put(&req->misc.release.path);
 			fuse_put_request(ff->fc, req);
