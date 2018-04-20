@@ -53,6 +53,7 @@
 #include <linux/oom.h>
 #include <linux/writeback.h>
 #include <linux/shm.h>
+#include <linux/kcov.h>
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
@@ -682,6 +683,7 @@ void do_exit(long code)
 	TASKS_RCU(int tasks_rcu_i);
 
 	profile_task_exit(tsk);
+	kcov_task_exit(tsk);
 
 	WARN_ON(blk_needs_flush_plug(tsk));
 
@@ -799,7 +801,9 @@ void do_exit(long code)
 	 */
 	flush_ptrace_hw_breakpoint(tsk);
 
+	TASKS_RCU(preempt_disable());
 	TASKS_RCU(tasks_rcu_i = __srcu_read_lock(&tasks_rcu_exit_srcu));
+	TASKS_RCU(preempt_enable());
 	exit_notify(tsk, group_dead);
 	proc_exit_connector(tsk);
 #ifdef CONFIG_NUMA
