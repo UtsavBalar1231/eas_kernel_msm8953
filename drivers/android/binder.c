@@ -137,8 +137,7 @@ enum {
 	BINDER_DEBUG_PRIORITY_CAP           = 1U << 13,
 	BINDER_DEBUG_SPINLOCKS              = 1U << 14,
 };
-static uint32_t binder_debug_mask = BINDER_DEBUG_USER_ERROR |
-	BINDER_DEBUG_FAILED_TRANSACTION | BINDER_DEBUG_DEAD_TRANSACTION;
+static uint32_t binder_debug_mask = 0;
 module_param_named(debug_mask, binder_debug_mask, uint, S_IWUSR | S_IRUGO);
 
 static char *binder_devices_param = CONFIG_ANDROID_BINDER_DEVICES;
@@ -980,7 +979,10 @@ static int task_get_unused_fd_flags(struct binder_proc *proc, int flags)
 	rlim_cur = task_rlimit(proc->tsk, RLIMIT_NOFILE);
 	unlock_task_sighand(proc->tsk, &irqs);
 
+	preempt_enable_no_resched();
 	ret = __alloc_fd(files, 0, rlim_cur, flags);
+	preempt_disable();
+
 err:
 	put_files_struct(files);
 	return ret;
@@ -995,8 +997,10 @@ static void task_fd_install(
 	struct files_struct *files = binder_get_files_struct(proc);
 
 	if (files) {
+		preempt_enable_no_resched();
 		__fd_install(files, fd, file);
 		put_files_struct(files);
+		preempt_disable();
 	}
 }
 
