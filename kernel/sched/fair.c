@@ -5224,24 +5224,20 @@ long group_norm_util(struct energy_env *eenv, int cpu_idx)
 
 static int find_new_capacity(struct energy_env *eenv, int cpu_idx)
 {
-	const struct sched_group_energy *sge = eenv->sg->sge;
 	int idx, max_idx = sge->nr_cap_states - 1;
-	unsigned long util = group_max_util(eenv, cpu_idx);
+	unsigned long util = group_max_util(eenv);
 
 	/* default is max_cap if we don't find a match */
-	eenv->cpu[cpu_idx].cap_idx = max_idx;
-	eenv->cpu[cpu_idx].cap = sge->cap_states[max_idx].cap;
+	eenv->cap_idx = max_idx;
 
 	for (idx = 0; idx < sge->nr_cap_states; idx++) {
 		if (sge->cap_states[idx].cap >= util) {
-			/* Keep track of SG's capacity */
-			eenv->cpu[cpu_idx].cap_idx = idx;
-			eenv->cpu[cpu_idx].cap = sge->cap_states[idx].cap;
+			eenv->cap_idx = idx;
 			break;
 		}
 	}
 
-	return eenv->cpu[cpu_idx].cap_idx;
+	return eenv->cap_idx;
 }
 
 static int group_idle_state(struct energy_env *eenv, int cpu_idx)

@@ -471,9 +471,6 @@ struct mm_struct {
 #endif
 	struct uprobes_state uprobes_state;
 	struct work_struct async_put_work;
-#ifdef CONFIG_MSM_APP_SETTINGS
-	int app_setting;
-#endif
 };
 
 static inline void mm_init_cpumask(struct mm_struct *mm)
